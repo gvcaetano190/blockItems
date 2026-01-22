@@ -126,94 +126,118 @@ console.log('BlockItems: Script iniciado');
     
     // Flag para controlar se já verificamos
     var blockitemsChecked = false;
+    var delegatedClickInstalled = false;
     
     function interceptButtonClicks(form, ticketId) {
-        // No GLPI 10, os botões podem estar FORA do form mas referenciam via form="itil-form"
-        // Procurar botões dentro do form E botões que referenciam o form
+        // Estratégia GLPI 10: delegação no document (os botões podem ser renderizados/trocados via AJAX)
+        // e podem estar fora do form com atributo form="itil-form".
         var formId = form.id || 'itil-form';
-        
-        // Botões dentro do form
-        var buttonsInForm = form.querySelectorAll('button[type="submit"], input[type="submit"], button[name="update"], button[name="add"]');
-        
-        // Botões fora do form que referenciam via form="itil-form"
-        var buttonsOutsideForm = document.querySelectorAll('button[form="' + formId + '"], input[form="' + formId + '"]');
-        
-        // Combinar todos os botões únicos
-        var allButtons = new Set();
-        buttonsInForm.forEach(function(btn) { allButtons.add(btn); });
-        buttonsOutsideForm.forEach(function(btn) { allButtons.add(btn); });
-        
-        var buttons = Array.from(allButtons);
-        console.log('BlockItems: Botões encontrados (total):', buttons.length);
-        
-        buttons.forEach(function(btn, index) {
-            console.log('BlockItems: Botão #' + index + ' - name=' + btn.name + ' type=' + btn.type + ' text=' + (btn.textContent || '').trim().substring(0, 30));
-            
-            // Só interceptar botões de update/save (não delete, restore, etc)
-            if (btn.name === 'delete' || btn.name === 'purge' || btn.name === 'restore') {
-                console.log('BlockItems: Ignorando botão de delete/purge/restore');
+
+        // Logar candidatos com seletor mais estrito (evita pegar input hidden name=id)
+        try {
+            var candidates = document.querySelectorAll(
+                'button[name="update"], button[name="add"], input[type="submit"][name="update"], input[type="submit"][name="add"], ' +
+                'button[form="' + formId + '"][name="update"], button[form="' + formId + '"][name="add"], ' +
+                'input[type="submit"][form="' + formId + '"][name="update"], input[type="submit"][form="' + formId + '"][name="add"]'
+            );
+            console.log('BlockItems: Candidatos de salvar (total):', candidates.length);
+            candidates.forEach(function(el, idx) {
+                console.log('BlockItems: Candidato #' + idx + ' tag=' + el.tagName + ' name=' + (el.name || '') + ' type=' + (el.type || '') + ' text=' + (el.textContent || '').trim().substring(0, 30));
+            });
+        } catch (err) {
+            console.warn('BlockItems: Falha ao listar candidatos:', err);
+        }
+
+        if (delegatedClickInstalled) {
+            console.log('BlockItems: Delegação de clique já instalada, pulando...');
+            return;
+        }
+        delegatedClickInstalled = true;
+        console.log('BlockItems: Instalando delegação de clique (capture) para salvar/update...');
+
+        document.addEventListener('click', async function(e) {
+            // Procurar o controle clicado (pode clicar no ícone dentro do botão)
+            var control = null;
+            if (e && e.target && typeof e.target.closest === 'function') {
+                control = e.target.closest('button, input');
+            }
+            if (!control) return;
+
+            var controlName = control.getAttribute('name') || control.name || '';
+            if (controlName !== 'update' && controlName !== 'add') {
                 return;
             }
-            
-            btn.addEventListener('click', async function(e) {
-                console.log('BlockItems: ====== CLIQUE NO BOTÃO ======');
-                console.log('BlockItems: Botão clicado:', btn.name || btn.textContent.trim());
-                
-                // Se já verificamos, permitir
-                if (blockitemsChecked) {
-                    console.log('BlockItems: Já verificado, permitindo');
-                    blockitemsChecked = false; // Reset para próxima vez
-                    return true;
+
+            // Confirmar que o botão está associado ao form do ticket
+            var associatedForm = control.form;
+            if (!associatedForm) {
+                var formAttr = control.getAttribute('form');
+                if (formAttr) {
+                    associatedForm = document.getElementById(formAttr);
                 }
-                
-                // Pegar status atual
-                var statusEl = form.querySelector('[name="status"]');
-                if (!statusEl) {
-                    statusEl = document.querySelector('[name="status"]');
-                }
-                var currentStatus = statusEl ? statusEl.value : null;
-                console.log('BlockItems: Status atual:', currentStatus);
-                
-                // Se não é solucionado/fechado, permitir
-                if (currentStatus !== STATUS_SOLVED && currentStatus !== STATUS_CLOSED) {
-                    console.log('BlockItems: Status não é 5 ou 6, permitindo');
-                    return true;
-                }
-                
-                // Bloquear ação e verificar
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                
-                console.log('BlockItems: Verificando computador...');
-                var hasComputer = await checkHasComputer(ticketId);
-                console.log('BlockItems: Tem computador?', hasComputer);
-                
-                if (hasComputer) {
-                    console.log('BlockItems: Tem computador, clicando botão novamente...');
-                    blockitemsChecked = true;
-                    btn.click();
-                    return;
-                }
-                
-                // Não tem computador - mostrar alerta
-                console.log('BlockItems: SEM computador, exibindo alerta...');
-                var confirmed = await showConfirmModal('Este chamado não possui <strong>Computador</strong> vinculado.<br><br>Deseja continuar?');
-                
-                if (confirmed) {
-                    console.log('BlockItems: Confirmado pelo usuário, clicando botão...');
-                    blockitemsChecked = true;
-                    btn.click();
-                } else {
-                    console.log('BlockItems: Cancelado pelo usuário');
-                }
-            }, true); // capture phase
-        });
-        
-        // Também monitorar o evento submit como backup
-        form.addEventListener('submit', function(e) {
+            }
+            if (!associatedForm || associatedForm !== form) {
+                console.log('BlockItems: Clique em update/add, mas não é do form esperado. name=' + controlName);
+                return;
+            }
+
+            console.log('BlockItems: ====== CLIQUE EM SALVAR (delegado) ======');
+            console.log('BlockItems: Control tag=' + control.tagName + ' name=' + controlName + ' type=' + (control.type || control.getAttribute('type') || ''));
+
+            // Se já verificamos, permitir
+            if (blockitemsChecked) {
+                console.log('BlockItems: Já verificado, permitindo');
+                blockitemsChecked = false; // reset
+                return;
+            }
+
+            // Pegar status atual
+            var statusEl = form.querySelector('select[name="status"]') || document.querySelector('select[name="status"]');
+            var currentStatus = statusEl ? statusEl.value : null;
+            console.log('BlockItems: Status atual:', currentStatus);
+
+            // Se não é solucionado/fechado, permitir
+            if (currentStatus !== STATUS_SOLVED && currentStatus !== STATUS_CLOSED) {
+                console.log('BlockItems: Status não é 5 ou 6, permitindo');
+                return;
+            }
+
+            // Bloquear ação e verificar
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            console.log('BlockItems: Verificando computador...');
+            var hasComputer = await checkHasComputer(ticketId);
+            console.log('BlockItems: Tem computador?', hasComputer);
+
+            if (hasComputer) {
+                console.log('BlockItems: Tem computador, permitindo submit no próximo clique');
+                blockitemsChecked = true;
+                setTimeout(function() {
+                    control.click();
+                }, 0);
+                return;
+            }
+
+            console.log('BlockItems: SEM computador, exibindo alerta...');
+            var confirmed = await showConfirmModal('Este chamado não possui <strong>Computador</strong> vinculado.<br><br>Deseja continuar?');
+
+            if (confirmed) {
+                console.log('BlockItems: Confirmado pelo usuário, permitindo submit no próximo clique');
+                blockitemsChecked = true;
+                setTimeout(function() {
+                    control.click();
+                }, 0);
+            } else {
+                console.log('BlockItems: Cancelado pelo usuário');
+            }
+        }, true); // capture phase
+
+        // Backup: log de submit
+        form.addEventListener('submit', function() {
             console.log('BlockItems: Submit event disparado');
-        });
+        }, true);
     }
     
 })();
