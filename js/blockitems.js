@@ -110,8 +110,11 @@ console.log('BlockItems: Script iniciado');
             console.log('BlockItems: Select #' + i + ' name=' + sel.name + ' id=' + sel.id);
         });
         
-        // Encontrar formulário
-        const form = document.querySelector('form[name="asset_form"]');
+        // O GLPI 10 usa form com id="itil-form" (não asset_form)
+        var form = document.getElementById('itil-form');
+        if (!form) {
+            form = document.querySelector('form[name="asset_form"]');
+        }
         console.log('BlockItems: Formulário encontrado?', form !== null);
         
         if (form) {
@@ -125,12 +128,32 @@ console.log('BlockItems: Script iniciado');
     var blockitemsChecked = false;
     
     function interceptButtonClicks(form, ticketId) {
-        // Encontrar todos os botões de submit
-        var buttons = form.querySelectorAll('button[type="submit"], input[type="submit"], button[name="update"], button[name="add"]');
-        console.log('BlockItems: Botões de submit encontrados:', buttons.length);
+        // No GLPI 10, os botões podem estar FORA do form mas referenciam via form="itil-form"
+        // Procurar botões dentro do form E botões que referenciam o form
+        var formId = form.id || 'itil-form';
+        
+        // Botões dentro do form
+        var buttonsInForm = form.querySelectorAll('button[type="submit"], input[type="submit"], button[name="update"], button[name="add"]');
+        
+        // Botões fora do form que referenciam via form="itil-form"
+        var buttonsOutsideForm = document.querySelectorAll('button[form="' + formId + '"], input[form="' + formId + '"]');
+        
+        // Combinar todos os botões únicos
+        var allButtons = new Set();
+        buttonsInForm.forEach(function(btn) { allButtons.add(btn); });
+        buttonsOutsideForm.forEach(function(btn) { allButtons.add(btn); });
+        
+        var buttons = Array.from(allButtons);
+        console.log('BlockItems: Botões encontrados (total):', buttons.length);
         
         buttons.forEach(function(btn, index) {
-            console.log('BlockItems: Botão #' + index + ' - name=' + btn.name + ' type=' + btn.type + ' text=' + btn.textContent.trim().substring(0, 20));
+            console.log('BlockItems: Botão #' + index + ' - name=' + btn.name + ' type=' + btn.type + ' text=' + (btn.textContent || '').trim().substring(0, 30));
+            
+            // Só interceptar botões de update/save (não delete, restore, etc)
+            if (btn.name === 'delete' || btn.name === 'purge' || btn.name === 'restore') {
+                console.log('BlockItems: Ignorando botão de delete/purge/restore');
+                return;
+            }
             
             btn.addEventListener('click', async function(e) {
                 console.log('BlockItems: ====== CLIQUE NO BOTÃO ======');
@@ -139,11 +162,15 @@ console.log('BlockItems: Script iniciado');
                 // Se já verificamos, permitir
                 if (blockitemsChecked) {
                     console.log('BlockItems: Já verificado, permitindo');
+                    blockitemsChecked = false; // Reset para próxima vez
                     return true;
                 }
                 
                 // Pegar status atual
                 var statusEl = form.querySelector('[name="status"]');
+                if (!statusEl) {
+                    statusEl = document.querySelector('[name="status"]');
+                }
                 var currentStatus = statusEl ? statusEl.value : null;
                 console.log('BlockItems: Status atual:', currentStatus);
                 
