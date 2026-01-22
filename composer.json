@@ -1,0 +1,35 @@
+{
+    "name": "gvcaetano190/blockitems",
+    "description": "GLPI Plugin to alert when a ticket is solved/closed without a linked computer",
+    "type": "glpi-plugin",
+    "license": "GPL-2.0-or-later",
+    "version": "1.0.0",
+    "keywords": [
+        "glpi",
+        "plugin",
+        "ticket",
+        "alert",
+        "computer",
+        "validation"
+    ],
+    "authors": [
+        {
+            "name": "Gabriel Caetano",
+            "email": "gvcaetano190@gmail.com",
+            "homepage": "https://github.com/gvcaetano190"
+        }
+    ],
+    "homepage": "https://github.com/gvcaetano190/blockItems",
+    "support": {
+        "issues": "https://github.com/gvcaetano190/blockItems/issues",
+        "source": "https://github.com/gvcaetano190/blockItems"
+    },
+    "require": {
+        "php": ">=8.0"
+    },
+    "config": {
+        "platform": {
+            "php": "8.0"
+        }
+    }
+}

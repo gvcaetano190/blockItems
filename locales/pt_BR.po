@@ -1,0 +1,41 @@
+# GLPI Plugin - BlockItems
+# Copyright (C) 2026 Gabriel Caetano
+# This file is distributed under the same license as the GLPI plugin.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: BlockItems 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-01-22 10:00-0300\n"
+"PO-Revision-Date: 2026-01-22 10:00-0300\n"
+"Last-Translator: Gabriel Caetano\n"
+"Language-Team: Portuguese (Brazil)\n"
+"Language: pt_BR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Block Items Alert"
+msgstr "Alerta de Itens"
+
+msgid "Configuration"
+msgstr "Configuração"
+
+msgid "Enable alert"
+msgstr "Habilitar alerta"
+
+msgid "Enable logs"
+msgstr "Habilitar logs"
+
+msgid "Settings saved!"
+msgstr "Configurações salvas!"
+
+msgid "This ticket has no computer linked."
+msgstr "Este chamado não possui computador vinculado."
+
+msgid "Warning"
+msgstr "Atenção"
+
+msgid "Do you want to continue anyway?"
+msgstr "Deseja continuar mesmo assim?"
