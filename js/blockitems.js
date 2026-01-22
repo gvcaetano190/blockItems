@@ -37,11 +37,39 @@
         }
     }
     
-    // Exibir modal de confirmação
+    // Exibir modal de confirmação usando GLPI dialog
     function showConfirmModal(message) {
         return new Promise((resolve) => {
-            // Tentar usar jQuery UI Dialog (disponível no GLPI)
-            if (typeof $ !== 'undefined' && typeof $.fn.dialog !== 'undefined') {
+            // Usar glpi_html_dialog do GLPI 10
+            if (typeof glpi_html_dialog === 'function') {
+                glpi_html_dialog({
+                    title: '⚠️ Computador não vinculado',
+                    body: '<div class="alert alert-warning">' +
+                          '<i class="fas fa-exclamation-triangle fa-2x mb-2"></i>' +
+                          '<p class="mb-0">' + message + '</p>' +
+                          '</div>',
+                    dialogclass: 'modal-md',
+                    buttons: [
+                        {
+                            label: 'Cancelar',
+                            class: 'btn-outline-secondary',
+                            click: function(e) {
+                                $(this).closest('.modal').modal('hide');
+                                resolve(false);
+                            }
+                        },
+                        {
+                            label: 'Continuar mesmo assim',
+                            class: 'btn-warning',
+                            click: function(e) {
+                                $(this).closest('.modal').modal('hide');
+                                resolve(true);
+                            }
+                        }
+                    ]
+                });
+            } else if (typeof $ !== 'undefined' && typeof $.fn.dialog !== 'undefined') {
+                // jQuery UI Dialog fallback
                 const $dialog = $('<div>')
                     .html('<p style="font-size:14px;"><strong>⚠️ ATENÇÃO</strong></p><p>' + message + '</p>')
                     .dialog({
@@ -112,8 +140,8 @@
                 if (!confirmed) {
                     // Reverter para status anterior
                     this.value = originalStatus;
-                    // Disparar evento change para atualizar interface
-                    this.dispatchEvent(new Event('change', { bubbles: true }));
+                    // Disparar evento change para atualizar interface do Select2
+                    $(this).trigger('change.select2');
                 } else {
                     originalStatus = newStatus;
                 }
