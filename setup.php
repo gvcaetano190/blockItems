@@ -17,6 +17,9 @@ function plugin_init_blockitems() {
     $PLUGIN_HOOKS['pre_item_update']['blockitems'] = [
         'Ticket' => 'plugin_blockitems_pre_item_update'
     ];
+    
+    // Hook para injetar HTML na página do ticket
+    $PLUGIN_HOOKS['add_div']['blockitems'] = 'plugin_blockitems_add_alert_div';
 }
 
 function plugin_version_blockitems() {
