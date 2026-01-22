@@ -43,26 +43,21 @@ console.log('BlockItems: Script iniciado');
             return data.has_computer;
         } catch (error) {
             console.error('BlockItems: Erro ao verificar computer', error);
-            return true; // Em caso de erro, permite continuar
+            return true;
         }
     }
     
-    // Exibir modal de confirmação usando GLPI dialog
+    // Exibir modal de confirmação
     function showConfirmModal(message) {
         console.log('BlockItems: Exibindo modal de confirmação');
         console.log('BlockItems: glpi_html_dialog disponível?', typeof glpi_html_dialog === 'function');
-        console.log('BlockItems: jQuery disponível?', typeof $ !== 'undefined');
         
         return new Promise((resolve) => {
-            // Usar glpi_html_dialog do GLPI 10
             if (typeof glpi_html_dialog === 'function') {
                 console.log('BlockItems: Usando glpi_html_dialog');
                 glpi_html_dialog({
                     title: '⚠️ Computador não vinculado',
-                    body: '<div class="alert alert-warning">' +
-                          '<i class="fas fa-exclamation-triangle fa-2x mb-2"></i>' +
-                          '<p class="mb-0">' + message + '</p>' +
-                          '</div>',
+                    body: '<div class="alert alert-warning"><p class="mb-0">' + message + '</p></div>',
                     dialogclass: 'modal-md',
                     buttons: [
                         {
@@ -83,141 +78,105 @@ console.log('BlockItems: Script iniciado');
                         }
                     ]
                 });
-            } else if (typeof $ !== 'undefined' && typeof $.fn.dialog !== 'undefined') {
-                // jQuery UI Dialog fallback
-                console.log('BlockItems: Usando jQuery UI Dialog');
-                const $dialog = $('<div>')
-                    .html('<p style="font-size:14px;"><strong>⚠️ ATENÇÃO</strong></p><p>' + message + '</p>')
-                    .dialog({
-                        modal: true,
-                        title: 'Computador não vinculado',
-                        width: 450,
-                        buttons: {
-                            'Continuar mesmo assim': function() {
-                                $(this).dialog('close');
-                                resolve(true);
-                            },
-                            'Cancelar': function() {
-                                $(this).dialog('close');
-                                resolve(false);
-                            }
-                        },
-                        close: function() {
-                            $(this).remove();
-                        }
-                    });
             } else {
-                // Fallback: confirm nativo
                 console.log('BlockItems: Usando confirm nativo');
-                const confirmed = confirm(
-                    '⚠️ ATENÇÃO\n\n' + 
-                    message.replace(/<[^>]*>/g, '') + '\n\n' +
-                    'Deseja continuar mesmo assim?'
-                );
+                const confirmed = confirm('⚠️ ATENÇÃO\n\n' + message.replace(/<[^>]*>/g, '') + '\n\nDeseja continuar mesmo assim?');
                 resolve(confirmed);
             }
         });
     }
     
-    // Interceptar mudança de status
+    // Inicialização
     document.addEventListener('DOMContentLoaded', function() {
         console.log('BlockItems: DOMContentLoaded disparado');
         
         const ticketId = getTicketId();
         console.log('BlockItems: Ticket ID:', ticketId);
-        if (!ticketId) {
-            console.log('BlockItems: Sem ticket ID, saindo...');
-            return;
+        if (!ticketId) return;
+        
+        // Aguardar GLPI renderizar elementos
+        setTimeout(function() {
+            initBlockItems(ticketId);
+        }, 1500);
+    });
+    
+    function initBlockItems(ticketId) {
+        console.log('BlockItems: Iniciando após timeout...');
+        
+        // Debug: listar todos os selects
+        const allSelects = document.querySelectorAll('select');
+        console.log('BlockItems: Total de selects:', allSelects.length);
+        allSelects.forEach(function(sel, i) {
+            console.log('BlockItems: Select #' + i + ' name=' + sel.name + ' id=' + sel.id);
+        });
+        
+        // Interceptar submit do formulário
+        const form = document.querySelector('form[name="asset_form"]');
+        console.log('BlockItems: Formulário encontrado?', form !== null);
+        
+        if (form) {
+            interceptFormSubmit(form, ticketId);
+            console.log('BlockItems: Plugin inicializado para ticket #' + ticketId);
         }
-        
-        // Encontrar o select de status
-        const statusSelect = document.querySelector('select[name="status"]');
-        console.log('BlockItems: Select de status encontrado?', statusSelect !== null);
-        if (!statusSelect) {
-            console.log('BlockItems: Select de status não encontrado, saindo...');
-            return;
-        }
-        
-        // Armazenar status original
-        let originalStatus = statusSelect.value;
-        let isProcessing = false;
-        
-        // Interceptar mudança de status
-        statusSelect.addEventListener('change', async function(e) {
-            const newStatus = this.value;
+    }
+    
+    function interceptFormSubmit(form, ticketId) {
+        form.addEventListener('submit', async function(e) {
+            console.log('BlockItems: ====== SUBMIT INTERCEPTADO ======');
             
-            // Verificar se está mudando para Solucionado ou Fechado
-            if (newStatus !== STATUS_SOLVED && newStatus !== STATUS_CLOSED) {
-                originalStatus = newStatus;
+            // Verificar se já confirmado
+            if (form.querySelector('input[name="blockitems_confirmed"]')) {
+                console.log('BlockItems: Já confirmado, permitindo');
+                return true;
+            }
+            
+            // Pegar status
+            var currentStatus = null;
+            var statusEl = form.querySelector('[name="status"]');
+            if (statusEl) {
+                currentStatus = statusEl.value;
+                console.log('BlockItems: Status encontrado:', currentStatus);
+            }
+            
+            // Se não é solucionado/fechado, permitir
+            if (currentStatus !== STATUS_SOLVED && currentStatus !== STATUS_CLOSED) {
+                console.log('BlockItems: Status não é 5 ou 6, permitindo');
+                return true;
+            }
+            
+            console.log('BlockItems: Verificando computador...');
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var hasComputer = await checkHasComputer(ticketId);
+            console.log('BlockItems: Tem computador?', hasComputer);
+            
+            if (hasComputer) {
+                console.log('BlockItems: Tem computador, submetendo...');
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'blockitems_confirmed';
+                input.value = '1';
+                form.appendChild(input);
+                form.submit();
                 return;
             }
             
-            if (isProcessing) return;
-            isProcessing = true;
+            console.log('BlockItems: SEM computador, exibindo alerta...');
+            var confirmed = await showConfirmModal('Este chamado não possui <strong>Computador</strong> vinculado.<br><br>Deseja continuar?');
             
-            // Verificar se tem Computer
-            const hasComputer = await checkHasComputer(ticketId);
-            
-            if (!hasComputer) {
-                const confirmed = await showConfirmModal(
-                    'Este chamado não possui <strong>Computador</strong> vinculado.<br><br>' +
-                    'Deseja continuar com a solução/fechamento mesmo assim?'
-                );
-                
-                if (!confirmed) {
-                    // Reverter para status anterior
-                    this.value = originalStatus;
-                    // Disparar evento change para atualizar interface do Select2
-                    $(this).trigger('change.select2');
-                } else {
-                    originalStatus = newStatus;
-                }
+            if (confirmed) {
+                console.log('BlockItems: Confirmado pelo usuário');
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'blockitems_confirmed';
+                input.value = '1';
+                form.appendChild(input);
+                form.submit();
             } else {
-                originalStatus = newStatus;
+                console.log('BlockItems: Cancelado pelo usuário');
             }
-            
-            isProcessing = false;
-        });
-        
-        // Também interceptar o submit do formulário como backup
-        const form = document.querySelector('form[name="asset_form"]');
-        if (form) {
-            form.addEventListener('submit', async function(e) {
-                const currentStatus = statusSelect ? statusSelect.value : null;
-                
-                if (currentStatus !== STATUS_SOLVED && currentStatus !== STATUS_CLOSED) {
-                    return true;
-                }
-                
-                // Verificar se já foi confirmado
-                if (form.querySelector('input[name="blockitems_confirmed"]')) {
-                    return true;
-                }
-                
-                // Verificar se tem Computer
-                const hasComputer = await checkHasComputer(ticketId);
-                
-                if (!hasComputer) {
-                    e.preventDefault();
-                    
-                    const confirmed = await showConfirmModal(
-                        'Este chamado não possui <strong>Computador</strong> vinculado.<br><br>' +
-                        'Deseja continuar com a solução/fechamento mesmo assim?'
-                    );
-                    
-                    if (confirmed) {
-                        // Submeter formulário novamente
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = 'blockitems_confirmed';
-                        input.value = '1';
-                        form.appendChild(input);
-                        form.submit();
-                    }
-                }
-            });
-        }
-        
-        console.log('BlockItems: Plugin carregado para ticket #' + ticketId);
-    });
+        }, true);
+    }
+    
 })();
