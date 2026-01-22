@@ -1,13 +1,21 @@
 /**
  * BlockItems - JavaScript para verificar Computer vinculado antes de solucionar/fechar
  */
+console.log('BlockItems: Script iniciado');
+
 (function() {
     'use strict';
     
+    console.log('BlockItems: Função IIFE executada');
+    console.log('BlockItems: URL atual:', window.location.href);
+    
     // Verificar se estamos na página de ticket
     if (!window.location.href.includes('ticket.form.php')) {
+        console.log('BlockItems: Não estamos na página de ticket, saindo...');
         return;
     }
+    
+    console.log('BlockItems: Estamos na página de ticket!');
     
     // Extrair ID do ticket da URL
     function getTicketId() {
@@ -21,15 +29,17 @@
     
     // Verificar se há Computer vinculado via AJAX
     async function checkHasComputer(ticketId) {
+        console.log('BlockItems: Verificando computer para ticket #' + ticketId);
         try {
-            const response = await fetch(
-                CFG_GLPI.root_doc + '/plugins/blockitems/ajax/check_computer.php?ticket_id=' + ticketId,
-                {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                }
-            );
+            const url = CFG_GLPI.root_doc + '/plugins/blockitems/ajax/check_computer.php?ticket_id=' + ticketId;
+            console.log('BlockItems: URL AJAX:', url);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                credentials: 'same-origin'
+            });
             const data = await response.json();
+            console.log('BlockItems: Resposta AJAX:', data);
             return data.has_computer;
         } catch (error) {
             console.error('BlockItems: Erro ao verificar computer', error);
@@ -39,9 +49,14 @@
     
     // Exibir modal de confirmação usando GLPI dialog
     function showConfirmModal(message) {
+        console.log('BlockItems: Exibindo modal de confirmação');
+        console.log('BlockItems: glpi_html_dialog disponível?', typeof glpi_html_dialog === 'function');
+        console.log('BlockItems: jQuery disponível?', typeof $ !== 'undefined');
+        
         return new Promise((resolve) => {
             // Usar glpi_html_dialog do GLPI 10
             if (typeof glpi_html_dialog === 'function') {
+                console.log('BlockItems: Usando glpi_html_dialog');
                 glpi_html_dialog({
                     title: '⚠️ Computador não vinculado',
                     body: '<div class="alert alert-warning">' +
@@ -70,6 +85,7 @@
                 });
             } else if (typeof $ !== 'undefined' && typeof $.fn.dialog !== 'undefined') {
                 // jQuery UI Dialog fallback
+                console.log('BlockItems: Usando jQuery UI Dialog');
                 const $dialog = $('<div>')
                     .html('<p style="font-size:14px;"><strong>⚠️ ATENÇÃO</strong></p><p>' + message + '</p>')
                     .dialog({
@@ -92,6 +108,7 @@
                     });
             } else {
                 // Fallback: confirm nativo
+                console.log('BlockItems: Usando confirm nativo');
                 const confirmed = confirm(
                     '⚠️ ATENÇÃO\n\n' + 
                     message.replace(/<[^>]*>/g, '') + '\n\n' +
@@ -104,12 +121,22 @@
     
     // Interceptar mudança de status
     document.addEventListener('DOMContentLoaded', function() {
+        console.log('BlockItems: DOMContentLoaded disparado');
+        
         const ticketId = getTicketId();
-        if (!ticketId) return;
+        console.log('BlockItems: Ticket ID:', ticketId);
+        if (!ticketId) {
+            console.log('BlockItems: Sem ticket ID, saindo...');
+            return;
+        }
         
         // Encontrar o select de status
         const statusSelect = document.querySelector('select[name="status"]');
-        if (!statusSelect) return;
+        console.log('BlockItems: Select de status encontrado?', statusSelect !== null);
+        if (!statusSelect) {
+            console.log('BlockItems: Select de status não encontrado, saindo...');
+            return;
+        }
         
         // Armazenar status original
         let originalStatus = statusSelect.value;
